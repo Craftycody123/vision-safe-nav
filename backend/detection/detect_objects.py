@@ -3,6 +3,7 @@ import cv2
 
 from backend.utils.distance_estimator import is_dangerous
 from backend.guidance.direction_helper import get_direction
+from backend.voice.speaker import speak
 
 model = YOLO("yolov8n.pt")
 
@@ -23,7 +24,6 @@ def start_detection():
                 cls_id = int(box.cls[0])
                 class_name = model.names[cls_id]
 
-                # Only important navigation objects
                 if class_name not in ["person", "chair", "couch", "bed", "dining table"]:
                     continue
 
@@ -32,7 +32,9 @@ def start_detection():
 
                 if is_dangerous(coords):
                     direction = get_direction(coords, frame_width)
-                    print(f"Obstacle on {direction}: {class_name}")
+                    warning_message = f"Obstacle on {direction}"
+                    print(warning_message)
+                    speak(warning_message)
 
         annotated_frame = results[0].plot()
         cv2.imshow("Vision Safe Nav", annotated_frame)
