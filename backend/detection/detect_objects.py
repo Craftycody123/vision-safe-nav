@@ -1,6 +1,8 @@
 from ultralytics import YOLO
 import cv2
 
+from backend.utils.distance_estimator import is_dangerous
+
 model = YOLO("yolov8n.pt")
 
 def start_detection():
@@ -11,7 +13,22 @@ def start_detection():
         if not ret:
             break
 
-        results = model(frame)
+        results = model(frame, verbose=False)
+
+        for r in results:
+            for box in r.boxes:
+                cls_id = int(box.cls[0])
+                class_name = model.names[cls_id]
+
+                # Filter important objects only
+                if class_name not in ["person", "chair", "couch", "bed", "dining table"]:
+                    continue
+
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                coords = (x1, y1, x2, y2)
+
+                if is_dangerous(coords):
+                    print(f"Obstacle ahead: {class_name}")
 
         annotated_frame = results[0].plot()
         cv2.imshow("Vision Safe Nav", annotated_frame)
