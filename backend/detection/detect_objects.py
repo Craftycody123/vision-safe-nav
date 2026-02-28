@@ -1,13 +1,14 @@
 from ultralytics import YOLO
 import cv2
 
+from backend.safety.obstacle_check import is_crowded
 from backend.utils.distance_estimator import is_dangerous
 from backend.guidance.direction_helper import get_direction
 from backend.voice.speaker import speak
 
 model = YOLO("yolov8n.pt")
 
-# Priority order for warnings (lower index = higher priority)
+# Priority order (most urgent first)
 PRIORITY_ORDER = ["ahead", "left", "right"]
 
 def get_priority(direction):
@@ -15,6 +16,7 @@ def get_priority(direction):
         return PRIORITY_ORDER.index(direction)
     except ValueError:
         return 99
+
 
 def start_detection():
     cap = cv2.VideoCapture(0)
@@ -27,12 +29,17 @@ def start_detection():
         frame_height, frame_width, _ = frame.shape
         results = model(frame, verbose=False)
 
-        warnings = []  # collect all warnings this frame
+        warnings = []
+        person_count = 0
 
+        # 🔍 Process detections
         for r in results:
             for box in r.boxes:
                 cls_id = int(box.cls[0])
                 class_name = model.names[cls_id]
+
+                if class_name == "person":
+                    person_count += 1
 
                 if class_name not in ["person", "chair", "couch", "bed", "dining table"]:
                     continue
@@ -42,18 +49,28 @@ def start_detection():
 
                 if is_dangerous(coords):
                     direction = get_direction(coords, frame_width)
-                    warnings.append((get_priority(direction), direction, class_name))
+                    priority = get_priority(direction)
 
-        if warnings:
-            # Sort by priority and pick the most urgent
-            warnings.sort(key=lambda w: w[0])
-            _, top_direction, top_object = warnings[0]
-            message = f"{top_object} {top_direction}"
+                    warnings.append((priority, direction, class_name))
+
+        # 🚨 CROWD HAS HIGHEST PRIORITY
+        if is_crowded(person_count):
+            message = "Crowded area ahead"
             print(message)
             speak(message)
-        else:
-            # Optionally announce clear path
-            speak("path clear")
+
+        # 🚨 Handle obstacle warnings
+        elif warnings:
+            warnings.sort(key=lambda w: w[0])
+            _, top_direction, top_object = warnings[0]
+
+            message = f"Obstacle on {top_direction}"
+            print(message)
+            speak(message)
+
+        # Optional: clear path message (comment if too chatty)
+        # else:
+        #     speak("Path clear")
 
         annotated_frame = results[0].plot()
         cv2.imshow("Vision Safe Nav", annotated_frame)
@@ -63,6 +80,7 @@ def start_detection():
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     start_detection()
