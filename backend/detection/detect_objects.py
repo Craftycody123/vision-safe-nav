@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 import cv2
-
+from backend.safety.hazard_check import detect_low_visibility
 from backend.safety.obstacle_check import is_crowded
 from backend.utils.distance_estimator import is_dangerous
 from backend.guidance.direction_helper import get_direction
@@ -58,7 +58,9 @@ def start_detection():
             message = "Crowded area ahead"
             print(message)
             speak(message)
-
+        elif detect_low_visibility(frame):
+            print("Low visibility detected")
+            speak("Low visibility detected")
         # 🚨 Handle obstacle warnings
         elif warnings:
             warnings.sort(key=lambda w: w[0])
